@@ -13,6 +13,7 @@ from src.models.components.network_resnet_generator import ResnetGenerator
 from src.models.components.network_patch_sample_F import PatchSampleF
 from src.models.components.network_G_resnet import G_Resnet
 from src.models.components.network_voxelmorph_original import VxmDense
+from src.models.components.network_PAdaIN_synthesis import PAdaINSynthesisModule
 
 
 def get_filter(filt_size=3):
@@ -235,6 +236,8 @@ def define_G(**kwargs):
         net = ResnetGenerator(**kwargs)
     elif kwargs.get('netG_type') == 'resnet_cat':
         net = G_Resnet(**kwargs)
+    elif kwargs.get('netG_type') == 'padain_synthesis':
+        net = PAdaINSynthesisModule(**kwargs)
     else:
         raise ValueError('This netG_type is not expected')
     return init_net(net, kwargs.get('init_type', 'normal'), kwargs.get('init_gain', 0.02), initialize_weights=True)

@@ -1,13 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn import init
-import functools
-from torch.optim import lr_scheduler
-import numpy as np
-from torch.autograd import Variable
 import math
-import pdb
 import os
 
 
@@ -30,7 +24,7 @@ class RbG_framework(nn.Module):
             self.regist_train = kwargs['regist_train']
             self.regist_type = kwargs['regist_type']
             self.regist_path = kwargs['regist_path']
-            self.flow_size = kwargs.get('flow_size', None)
+            self.regist_size = kwargs.get('regist_size', None)
 
         except KeyError as e:
             raise ValueError(f"Missing required parameter: {str(e)}")
@@ -41,13 +35,28 @@ class RbG_framework(nn.Module):
         self.regist_path = os.path.join(project_root, self.regist_path)
         self.synth_path = os.path.join(project_root, self.synth_path)
 
-        ## Define Registration Network(R)
+        ## Define Registration Network (R)
         if self.regist_type == "voxelmorph" or self.regist_type == "zero":
-            from src.models.components.voxelmorph import VxmDense
-            self.regist_net = VxmDense.load(path=self.regist_path, device='cpu')
+            from src.models.components.network_voxelmorph_original import VxmDense
+            self.regist_net = VxmDense(inshape=self.regist_size,
+                                           nb_unet_features=[[16, 32, 32, 32], [32, 32, 32, 32, 32, 16, 16]],
+                                           nb_unet_levels=None,
+                                           unet_feat_mult=1,
+                                           nb_unet_conv_per_level=1,
+                                           int_steps=7,
+                                           int_downsize=2,
+                                           bidir=False,
+                                           use_probs=False,
+                                           src_feats=self.in_ch,
+                                           trg_feats=self.ref_ch,
+                                           unet_half_res=False,)
+            checkpoint = torch.load(self.regist_path, map_location=lambda storage, loc: storage)
+            model_state_dict = checkpoint["state_dict"]
+            adjusted_state_dict = {k.replace("netR_A.", ""): v for k, v in model_state_dict.items()}
+            self.regist_net.load_state_dict(adjusted_state_dict, strict=False)
             self.regist_net.eval()
         else:
-            raise ValueError(f"Unrecognized flow type: {self.regist_type}.")
+            raise ValueError(f"Unrecognized regist type: {self.regist_type}.")
 
         for param in self.regist_net.parameters():
             param.requires_grad = self.regist_train  # False
@@ -55,26 +64,35 @@ class RbG_framework(nn.Module):
         if self.synth_train:
             assert self.synth_path != None
         
-        ## Define Stage1 (Synthesis network(G))
-        if self.synth_type == "stage1":
+        ## Define Synthesis network (G) (for Stage1)
+        if self.synth_type == "munit":
             from src.models.components.network_adainGen import AdaINGen
-            self.synth_net_mr = AdaINGen(input_nc=1, output_nc=1, ngf=64)
+            self.synth_net_a = AdaINGen(input_nc=1, output_nc=1, ngf=64)
             checkpoint = torch.load(self.synth_path, map_location=lambda storage, loc: storage)
             model_state_dict = checkpoint["state_dict"]
             adjusted_state_dict = {k.replace("netG_A.", ""): v for k, v in model_state_dict.items()}
-            self.synth_net_mr.load_state_dict(adjusted_state_dict, strict=False)
-            self.synth_net_mr.eval()
+            self.synth_net_a.load_state_dict(adjusted_state_dict, strict=False)
+            self.synth_net_a.eval()
 
-            self.synth_net_ct = AdaINGen(input_nc=1, output_nc=1, ngf=64)
+            self.synth_net_b = AdaINGen(input_nc=1, output_nc=1, ngf=64)
             checkpoint = torch.load(self.synth_path, map_location=lambda storage, loc: storage)
             model_state_dict = checkpoint["state_dict"]
             adjusted_state_dict = {k.replace("netG_B.", ""): v for k, v in model_state_dict.items()}
-            self.synth_net_ct.load_state_dict(adjusted_state_dict, strict=False)
-            self.synth_net_ct.eval()
+            self.synth_net_b.load_state_dict(adjusted_state_dict, strict=False)
+            self.synth_net_b.eval()
 
-        ## Define feature extractor.
-        self.net1 = UNet(self.in_ch * 2, self.feat_dim, self.feat_dim)
-        self.net2 = UNet(self.ref_ch, self.feat_dim, self.feat_dim)
+        elif self.synth_type == "padain_synthesis":
+            from src.models.components.network_PAdaIN_synthesis import PAdaINSynthesisModule
+            self.synth_net = PAdaINSynthesisModule(input_nc=1, feat_ch=256, output_nc=1, demodulate=True)
+            checkpoint = torch.load(self.synth_path, map_location=lambda storage, loc: storage)
+            model_state_dict = checkpoint["state_dict"]
+            adjusted_state_dict = {k.replace("netG_A.", ""): v for k, v in model_state_dict.items()}
+            self.synth_net.load_state_dict(adjusted_state_dict, strict=False)
+            self.synth_net.eval()
+
+        ## Define FE1, FE2 (Feature Extractor) (= Net1, Net2)
+        self.FE1 = UNet(self.in_ch * 2, self.feat_dim, self.feat_dim)
+        self.FE2 = UNet(self.ref_ch, self.feat_dim, self.feat_dim)
 
         ## Define DACA block
         self.DACA_block = nn.ModuleList(
@@ -100,7 +118,7 @@ class RbG_framework(nn.Module):
             ]
         )
 
-        ## Define Net3
+        ## Define FR (Feature Reconsturction) (= Net3)
         self.conv0 = dual_conv(self.feat_dim, self.feat_dim)
         self.conv1 = dual_conv_downsample(self.feat_dim, self.feat_dim)
         self.conv2 = dual_conv_downsample(self.feat_dim, self.feat_dim)
@@ -114,66 +132,70 @@ class RbG_framework(nn.Module):
         if not self.main_train:
             self.eval()
             for key, param in self.named_parameters():
-                if "flow_estimator" not in key and "DAM" not in key:
+                if "regist_net" not in key and "synth_net" not in key:
                     param.requires_grad = False
         else:
             self.train()
             for key, param in self.named_parameters():
-                if "flow_estimator" not in key and "DAM" not in key:
+                if "regist_net" not in key and "synth_net" not in key:
                     param.requires_grad = True
 
-    def forward(self, input_mr, ref_ct, mask=None, for_nce=False, for_src=False):
+    def forward(self, input_img, ref_img):
         assert (
-            input_mr.shape == ref_ct.shape
+            input_img.shape == ref_img.shape
         ), "Shapes of source and reference images \
                                         mismatch."
-        device = input_mr.device
+        device = input_img.device
         self.regist_net.to(device)
         moved = None
 
-        ## Getting Synth-CT (Stage1)
-        if self.synth_type == "stage1":
-            c_mr, s_mr = self.synth_net_mr.encode(input_mr)
-            c_ct, s_ct = self.synth_net_ct.encode(ref_ct)
-            synth_ct = self.synth_net_ct.decode(c_mr, s_ct)
+        ## Getting Initial Output (= Synth-CT) (Stage1)
+        if self.synth_type == "munit":
+            c_input, s_input = self.synth_net_a.encode(input_img)
+            c_ref, s_ref = self.synth_net_b.encode(ref_img)
+            synth_img = self.synth_net_b.decode(c_input, s_ref)
+
+        elif self.synth_type == "padain_synthesis":
+            synth_img = self.synth_net(input_img, ref_img)
+
         else:
             raise ValueError(
-                "Invalid dam_type provided. Expected 'dam' or 'synthesis_meta'."
+                "Invalid synth_type provided. Expected 'munit' or 'padain_synthesis'."
             )
 
-        height_multiple = self.flow_size[0] if self.flow_size else 768
-        width_multiple = self.flow_size[1] if self.flow_size else 576
+        height_multiple = self.regist_size[0] if self.regist_size else 768
+        width_multiple = self.regist_size[1] if self.regist_size else 576
 
         ## Getting Deformation field (phi)
         if self.regist_type == "voxelmorph":
-            if self.synth_type == "stage1":
-                input_mr, moving_padding = self.pad_tensor_to_multiple(input_mr, height_multiple=height_multiple, width_multiple=width_multiple)
-                ref_ct, fixed_padding = self.pad_tensor_to_multiple(ref_ct, height_multiple=height_multiple, width_multiple=width_multiple)
+            if self.synth_type in ["munit", "proposed_synthesis"]:
+                input_img, moving_padding = self.pad_tensor_to_multiple(input_img, height_multiple=height_multiple, width_multiple=width_multiple)
+                ref_img, fixed_padding = self.pad_tensor_to_multiple(ref_img, height_multiple=height_multiple, width_multiple=width_multiple)
                 
-                _, deform_field = self.regist_net(input_mr, ref_ct, registration=True) 
+                _, deform_field = self.regist_net(input_img, ref_img, registration=True) 
 
-                input_mr = self.crop_tensor_to_original(input_mr, fixed_padding)
-                ref_ct = self.crop_tensor_to_original(ref_ct, fixed_padding)
+                input_img = self.crop_tensor_to_original(input_img, fixed_padding)
+                ref_img = self.crop_tensor_to_original(ref_img, fixed_padding)
                 deform_field = self.crop_tensor_to_original(deform_field, fixed_padding)
     
             else:
                 raise ValueError("Invalid synth_type")
 
-        ## Net1, Net2 Feature extraction
-        mr_synCT_cat = torch.cat((input_mr, synth_ct), dim=1)
-        F_mr_synCT_cat = self.net1(mr_synCT_cat)
-        F_ct = self.net2(ref_ct)
+        ## FE1, FE2 (Feature Extractor) (= Net1, Net2)
+        input_synth_cat = torch.cat((input_img, synth_img), dim=1)
+        F_input_synth_cat = self.FE1(input_synth_cat)
+        F_ref = self.FE2(ref_img)
 
         ## DACA block
         outputs = []
         for i in range(3):
             outputs.append(
                 self.DACA_block[i](
-                    F_mr_synCT_cat[i + 3], F_ct[i + 3], F_ct[i + 3], deform_field
+                    F_input_synth_cat[i + 3], F_ref[i + 3], F_ref[i + 3], deform_field
                 )
             )
 
-        # Net3
+        # FR (Feature Reconsturction) (= Net3)
         f0 = self.conv0(outputs[2])  # H, W
         f1 = self.conv1(f0)  # H/2, W/2
         f1 = f1 + outputs[1]
@@ -189,7 +211,7 @@ class RbG_framework(nn.Module):
         out = self.conv6(f5)
         out = torch.tanh(out)
 
-        return out # Pseudo-CT
+        return out # Output (= Pseudo-CT)
 
 
     def pad_tensor_to_multiple(self, tensor, height_multiple, width_multiple):
@@ -227,25 +249,6 @@ class RbG_framework(nn.Module):
 
 
 def resize_deform_field(deform_field, size_type, sizes, interp_mode="bilinear", align_corners=False):
-    """Resize a flow according to ratio or shape.
-
-    Args:
-        flow (Tensor): Precomputed flow. shape [N, 2, H, W].
-        size_type (str): 'ratio' or 'shape'.
-        sizes (list[int | float]): the ratio for resizing or the final output
-            shape.
-            1) The order of ratio should be [ratio_h, ratio_w]. For
-            downsampling, the ratio should be smaller than 1.0 (i.e., ratio
-            < 1.0). For upsampling, the ratio should be larger than 1.0 (i.e.,
-            ratio > 1.0).
-            2) The order of output_size should be [out_h, out_w].
-        interp_mode (str): The mode of interpolation for resizing.
-            Default: 'bilinear'.
-        align_corners (bool): Whether align corners. Default: False.
-
-    Returns:
-        Tensor: Resized flow.
-    """
     _, _, field_h, field_w = deform_field.size()
     if size_type == "ratio":
         output_h, output_w = int(field_h * sizes[0]), int(field_w * sizes[1])
@@ -491,7 +494,7 @@ class MultiHeadAttention(nn.Module):
 
     def forward(self, query, key, value, deform_field):
         # input: n x c x h x w
-        # flow: n x 2 x h x w
+        # regist: n x 2 x h x w
         d_k, d_v, n_head = self.d_k, self.d_v, self.num_head
 
         # Pass through the pre-attention projection:
