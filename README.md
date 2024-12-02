@@ -37,7 +37,7 @@ pip install tensorboardX
 
 ## 3. Dataset
 ### Dataset 
-Grand challenge ['SynthRAD 2023'](https://synthrad2023.grand-challenge.org/) Pelvis MR, CT
+Grand challenge ['SynthRAD 2023'](https://synthrad2023.grand-challenge.org/) Pelvis MR, CT.  
 The demo dataset for testing can be downloaded from [this link](https://drive.google.com/drive/folders/1Vvm4NtNGuHSkscJDLh9Kgs0ssupe4EZ2?usp=sharing/).  
 Put it in the following path: `/data`.  
 
