@@ -36,7 +36,7 @@ class RbG_framework(nn.Module):
         self.synth_path = os.path.join(project_root, self.synth_path)
 
         ## Define Registration Network (R)
-        if self.regist_type == "voxelmorph" or self.regist_type == "zero":
+        if self.regist_type == "voxelmorph_original" or self.regist_type == "zero":
             from src.models.components.network_voxelmorph_original import VxmDense
             self.regist_net = VxmDense(inshape=self.regist_size,
                                            nb_unet_features=[[16, 32, 32, 32], [32, 32, 32, 32, 32, 16, 16]],
@@ -167,8 +167,8 @@ class RbG_framework(nn.Module):
         width_multiple = self.regist_size[1] if self.regist_size else 576
 
         ## Getting Deformation field (phi)
-        if self.regist_type == "voxelmorph":
-            if self.synth_type in ["munit", "proposed_synthesis"]:
+        if self.regist_type == "voxelmorph_original":
+            if self.synth_type in ["munit", "padain_synthesis"]:
                 input_img, moving_padding = self.pad_tensor_to_multiple(input_img, height_multiple=height_multiple, width_multiple=width_multiple)
                 ref_img, fixed_padding = self.pad_tensor_to_multiple(ref_img, height_multiple=height_multiple, width_multiple=width_multiple)
                 
