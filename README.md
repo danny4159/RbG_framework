@@ -58,8 +58,6 @@ All datasets must be resized to have the same width and height dimensions.
 Pretrained weights can be downloaded from [this link](https://drive.google.com/drive/folders/1M-7WRObLH3CrzhCJgm3XVlslVVrJbMf-?usp=sharing/).  
 Put it in the following path: `/pretrained`.  
 
-**Note:** The weights for **Stage 2** will be **added on December 5**.  
-
 
 ## 5. How to test (with pretrained weight)
 
