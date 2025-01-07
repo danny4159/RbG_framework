@@ -33,7 +33,7 @@ pip install torch-fidelity
 pip install gdown
 pip install tensorboardX
 pip install -U openmim
-mim install mmcv-lite
+mim install mmcv
 ```  
 
 
