@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 import os
+import copy
 
 
 class RbG_framework(nn.Module):
@@ -55,6 +56,9 @@ class RbG_framework(nn.Module):
             adjusted_state_dict = {k.replace("netR_A.", ""): v for k, v in model_state_dict.items()}
             self.regist_net.load_state_dict(adjusted_state_dict, strict=False)
             self.regist_net.eval()
+
+            # Use deepcopy to prevent overwriting Lightning model weights
+            self._regist_net_backup_weights = copy.deepcopy(self.regist_net.state_dict()) 
         else:
             raise ValueError(f"Unrecognized regist type: {self.regist_type}.")
 
@@ -81,6 +85,9 @@ class RbG_framework(nn.Module):
             self.synth_net_b.load_state_dict(adjusted_state_dict, strict=False)
             self.synth_net_b.eval()
 
+            self._synth_net_a_backup_weights = copy.deepcopy(self.synth_net_a.state_dict()) 
+            self._synth_net_b_backup_weights = copy.deepcopy(self.synth_net_b.state_dict()) 
+
         elif self.synth_type == "padain_synthesis":
             from src.models.components.network_PAdaIN_synthesis import PAdaINSynthesisModule
             self.synth_net = PAdaINSynthesisModule(input_nc=1, feat_ch=256, output_nc=1, demodulate=True)
@@ -89,6 +96,9 @@ class RbG_framework(nn.Module):
             adjusted_state_dict = {k.replace("netG_A.", ""): v for k, v in model_state_dict.items()}
             self.synth_net.load_state_dict(adjusted_state_dict, strict=False)
             self.synth_net.eval()
+
+            # Use deepcopy to prevent overwriting Lightning model weights
+            self._synth_net_backup_weights = copy.deepcopy(self.synth_net.state_dict()) 
 
         ## Define FE1, FE2 (Feature Extractor) (= Net1, Net2)
         self.FE1 = UNet(self.in_ch * 2, self.feat_dim, self.feat_dim)
@@ -151,12 +161,17 @@ class RbG_framework(nn.Module):
 
         ## Getting Initial Output (= Synth-CT) (Stage1)
         if self.synth_type == "munit":
+            self.synth_net_a.load_state_dict(self._synth_net_a_backup_weights)
+            self.synth_net_b.load_state_dict(self._synth_net_b_backup_weights)
+
             c_input, s_input = self.synth_net_a.encode(input_img)
             c_ref, s_ref = self.synth_net_b.encode(ref_img)
             synth_img = self.synth_net_b.decode(c_input, s_ref)
 
         elif self.synth_type == "padain_synthesis":
-            synth_img = self.synth_net(input_img, ref_img)
+            self.synth_net.load_state_dict(self._synth_net_backup_weights)
+
+            synth_img = self.synth_net(input_img, ref_img, encode_only=False)
 
         else:
             raise ValueError(
@@ -168,13 +183,16 @@ class RbG_framework(nn.Module):
 
         ## Getting Deformation field (phi)
         if self.regist_type == "voxelmorph_original":
+            self.regist_net.load_state_dict(self._regist_net_backup_weights)
+
             if self.synth_type in ["munit", "padain_synthesis"]:
-                input_img, moving_padding = self.pad_tensor_to_multiple(input_img, height_multiple=height_multiple, width_multiple=width_multiple)
+                synth_img, moving_padding = self.pad_tensor_to_multiple(synth_img, height_multiple=height_multiple, width_multiple=width_multiple)
                 ref_img, fixed_padding = self.pad_tensor_to_multiple(ref_img, height_multiple=height_multiple, width_multiple=width_multiple)
                 
-                _, deform_field = self.regist_net(input_img, ref_img, registration=True) 
+                moved, deform_field = self.regist_net(synth_img, ref_img, registration=True) 
 
-                input_img = self.crop_tensor_to_original(input_img, fixed_padding)
+                moved = self.crop_tensor_to_original(moved, fixed_padding)
+                synth_img = self.crop_tensor_to_original(synth_img, fixed_padding)
                 ref_img = self.crop_tensor_to_original(ref_img, fixed_padding)
                 deform_field = self.crop_tensor_to_original(deform_field, fixed_padding)
     
