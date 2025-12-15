@@ -1,22 +1,22 @@
 # RbG_framework
 
-![Graphical Abstract](images/fig_graphical_abstract_ver2.png)
-
-### Overview
+### 📖 Overview
 The **Register by Generation (RbG)** framework is a novel 2D deep learning approach for cross-modality image registration. Unlike conventional registration methods that warp images using deformation fields, RbG **generates** aligned images that preserve both structural alignment with the input image (fixed) and the intensity/contrast features of the reference image (moving).
 
-## Publication
+![Graphical Abstract](images/fig_graphical_abstract_ver2.png)
+
+## 📄 Publication
 
 **Published online in IEEE Journal of Biomedical and Health Informatics (JBHI), 2025**
 
-## 1. Development Stack
+## 🛠️ Development Stack
 
 - Templates from https://github.com/ashleve/lightning-hydra-template was used.
 
 - `Pytorch-lighting` + `Hydra` + `Tensorboard` was used for experiment-tracking
 
 
-## 2. Installation
+## 📦 Installation
 
 ```bash
 conda env create -f environment.yml
@@ -45,11 +45,11 @@ mim install mmcv
 ```  
 
 
-## 3. Dataset
-### Dataset 
-Grand challenge ['SynthRAD 2023'](https://synthrad2023.grand-challenge.org/) Pelvis MR, CT.  
-The demo dataset for testing can be downloaded from [this link](https://drive.google.com/drive/folders/1Vvm4NtNGuHSkscJDLh9Kgs0ssupe4EZ2?usp=sharing/).  
-Put it in the following path: `/data`.  
+## 📊 Dataset
+
+Grand challenge ['SynthRAD 2023'](https://synthrad2023.grand-challenge.org/) Pelvis MR, CT.
+The demo dataset for testing can be downloaded from [this link](https://drive.google.com/drive/folders/1Vvm4NtNGuHSkscJDLh9Kgs0ssupe4EZ2?usp=sharing/).
+Put it in the following path: `/data`.
 
 ### Dataset Structure (HDF5 Format: Hierarchical Data Structure)
 
@@ -64,12 +64,13 @@ The dataset is stored in an HDF5 file with the following hierarchical structure:
 All datasets must be resized to have the same width and height dimensions.  
 
 
-## 4. Pretrained weight 
-Pretrained weights can be downloaded from [this link](https://drive.google.com/drive/folders/1M-7WRObLH3CrzhCJgm3XVlslVVrJbMf-?usp=sharing/).  
-Put it in the following path: `/pretrained`.  
+## ⚙️ Pretrained Weights
+
+Pretrained weights can be downloaded from [this link](https://drive.google.com/drive/folders/1M-7WRObLH3CrzhCJgm3XVlslVVrJbMf-?usp=sharing/).
+Put it in the following path: `/pretrained`.
 
 
-## 5. How to test (with pretrained weight)
+## 🧪 How to Test (with pretrained weight)
 
 ### Stage 1
 ```bash
@@ -84,7 +85,7 @@ python src/train.py model='RbG.yaml' trainer.devices=[0] tags='RbG_MrCtPelvisDat
 ```  
 
 
-## 6. How to train
+## 🚀 How to Train
 
 ### 1st. Stage 1
 ```bash
@@ -107,7 +108,7 @@ python src/train.py model='RbG.yaml' trainer.devices=[0] tags='RbG_MrCtPelvisDat
 ```
 
 
-## 7. Citation
+## 📚 Citation
 
 If you find this work useful for your research, please cite:
 
