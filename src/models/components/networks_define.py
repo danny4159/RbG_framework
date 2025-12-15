@@ -230,6 +230,14 @@ def define_G(**kwargs):
     net = None
     if kwargs.get('netG_type') == 'RbG':
         net = RbG_framework(**kwargs)
+        
+        if not kwargs.get("regist_train", False):
+            init_net(net, kwargs.get("init_type", "normal"), kwargs.get("init_gain", 0.02), initialize_weights=True)
+        else:
+            for name, module in net.named_children():
+                if name != "regist_net":
+                    init_weights(module, kwargs.get("init_type", "normal"), kwargs.get("init_gain", 0.02))
+
     elif kwargs.get('netG_type') == 'adainGen':
         net = AdaINGen(**kwargs)
     elif kwargs.get('netG_type') == 'resnet_generator':

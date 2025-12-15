@@ -1,7 +1,17 @@
 # RbG_framework
 
+![Graphical Abstract](images/fig_graphical_abstract_ver2.png)
+
+## Publication
+
+**Published online in IEEE Journal of Biomedical and Health Informatics (JBHI), 2025**
 
 ## 1. Description
+
+### Overview
+The **Register by Generation (RbG)** framework is a novel 2D deep learning approach for cross-modality image registration. Unlike conventional registration methods that warp images using deformation fields, RbG **generates** aligned images that preserve both structural alignment with the input image (fixed) and the intensity/contrast features of the reference image (moving).
+
+### Technical Stack
 
 - Templates from https://github.com/ashleve/lightning-hydra-template was used.
 
@@ -96,4 +106,13 @@ Stage 2 is trained using the weights obtained from Stage 1 and Registration.
 ```bash
 python src/train.py model='RbG.yaml' trainer.devices=[0] tags='RbG_MrCtPelvisDataset_Test' data.use_split_inference=false data.train_file=Train_Demo.h5 data.val_file=Val_Demo.h5 data.test_file=Test_Demo.h5 model.netG_A.synth_type='padain_synthesis' model.netG_A.synth_path='pretrained/MR-CT/stage1_synthesis/PAdaIN_synthesis.ckpt' model.netG_A.regist_path='pretrained/MR-CT/registration/pretrained_Voxelmorph.ckpt' model.netG_A.regist_size=[384,320]
 # data.use_split_inference: Whether to split the image into two parts for inference. Set it to 'true' if the memory is insufficient.
+```
+
+
+## 7. Citation
+
+If you find this work useful for your research, please cite:
+
+```
+Kim, Daniel, et al. "Cross-Modality Image Registration Via Generating Aligned Image Using Reference-Augmented Framework." IEEE Journal of Biomedical and Health Informatics (2025).
 ```

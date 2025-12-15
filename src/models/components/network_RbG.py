@@ -183,7 +183,8 @@ class RbG_framework(nn.Module):
 
         ## Getting Deformation field (phi)
         if self.regist_type == "voxelmorph_original":
-            self.regist_net.load_state_dict(self._regist_net_backup_weights)
+            if not self.regist_train:
+                self.regist_net.load_state_dict(self._regist_net_backup_weights)
 
             if self.synth_type in ["munit", "padain_synthesis"]:
                 synth_img, moving_padding = self.pad_tensor_to_multiple(synth_img, height_multiple=height_multiple, width_multiple=width_multiple)
