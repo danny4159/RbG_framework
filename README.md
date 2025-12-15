@@ -2,20 +2,18 @@
 
 ![Graphical Abstract](images/fig_graphical_abstract_ver2.png)
 
+### Overview
+The **Register by Generation (RbG)** framework is a novel 2D deep learning approach for cross-modality image registration. Unlike conventional registration methods that warp images using deformation fields, RbG **generates** aligned images that preserve both structural alignment with the input image (fixed) and the intensity/contrast features of the reference image (moving).
+
 ## Publication
 
 **Published online in IEEE Journal of Biomedical and Health Informatics (JBHI), 2025**
 
-## 1. Description
-
-### Overview
-The **Register by Generation (RbG)** framework is a novel 2D deep learning approach for cross-modality image registration. Unlike conventional registration methods that warp images using deformation fields, RbG **generates** aligned images that preserve both structural alignment with the input image (fixed) and the intensity/contrast features of the reference image (moving).
-
-### Technical Stack
+## 1. Development Stack
 
 - Templates from https://github.com/ashleve/lightning-hydra-template was used.
 
-- `Pytorch-lighting` + `Hydra` + `Tensorboard` was used for experiment-tracking  
+- `Pytorch-lighting` + `Hydra` + `Tensorboard` was used for experiment-tracking
 
 
 ## 2. Installation
